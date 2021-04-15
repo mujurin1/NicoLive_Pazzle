@@ -6,7 +6,7 @@ import { MyPlayer } from "./MyPlayer";
 function main(param: g.GameMainParameterObject): void {
   var scene = new g.Scene({
     game: g.game,
-    assetIds: ["joinBtn", "playBtn", "setting", "set1Btn", "zoomIn", "zoomOut", "previewBtn", "titleBtn"],
+    assetIds: ["joinBtn", "playBtn", "setting", "zoomIn", "zoomOut", "previewBtn", "titleBtn"],
     assetPaths: ["/assets/**/*"],
   });
 
