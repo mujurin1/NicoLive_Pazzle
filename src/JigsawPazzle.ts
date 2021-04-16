@@ -25,7 +25,9 @@ export interface PazzleProperty {
  * ローカル。
  */
 export class JigsawPazzle {
-  /** パズルのID。 */
+  /** パズルのアセットID。 */
+  pazzleAssetId: number;
+  /** パズルのID。`JigsawGame.playingPazzles` の要素番目。 */
   pazzleId: number;
   /** パズルの名前。 */
   name: string;
@@ -70,8 +72,9 @@ export class JigsawPazzle {
   /**
    * _
    */
-  constructor(scene: g.Scene, param: PazzleProperty){
-    this.pazzleId = param.pazzleId;
+  constructor(scene: g.Scene, pazzleId: number, param: PazzleProperty){
+    this.pazzleAssetId = param.pazzleId;
+    this.pazzleId = pazzleId;
     this.name = param.setting[0];
     this.preview = new g.Sprite({
       scene,
@@ -267,9 +270,8 @@ export class JigsawPazzle {
    */
   private connectPiece(pieceA: JigsawPiece, pieceB: JigsawPiece): boolean {
     // ピースがこのパズルのピースじゃなかった。
-    if(pieceA.pazzle != this || pieceB.pazzle != this) {
-      throw Error(`このボードに属さないピースが指定されました。\n pieceA ${pieceB}\n pieceA ${pieceB}`);
-    };
+    // バグでも無い限り絶対 `false` になる（ここでリターンしない）はず
+    if(pieceA.pazzle != this || pieceB.pazzle != this) return false;
 
     // すでに繋がっている
     if( pieceA.owner != undefined &&
@@ -282,8 +284,11 @@ export class JigsawPazzle {
         pieceB.owner != undefined &&
         pieceA.pieceId == pieceB.owner.pieceId
       ) return false;
+    // どっちかのピースは、誰かが持っている
+    if(pieceA.holdPlayer() != undefined || pieceB.holdPlayer() != undefined)
+      return false;
 
-      // ボードにハマっているピース
+    // ボードにハマっているピース
     if(pieceA.fitted || pieceB.fitted) return false;
 
     // 繋がるかどうかを調べる

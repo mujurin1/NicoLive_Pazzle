@@ -89,11 +89,11 @@ export class PazzlePreview {
     new Label({
       scene: assets.scene,
       font: this.font,
-      width: 80,
+      width: 150,
       height: 30,
-      text: "v0.5",
+      text: "v0.8",
       fontSize: 30,
-      x: 1150,
+      x: 1100,
       y: 680,
       parent: this.display,
     })

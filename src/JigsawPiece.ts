@@ -1,6 +1,7 @@
 import { JigsawGame } from "./JigsawGame";
 import { JigsawPazzle } from "./JigsawPazzle";
 import { PieceDownEventData, PieceMoveEventData, PieceUpEventData } from "./MyEventData";
+import { MyPlayer } from "./MyPlayer";
 
 export interface PieceParameterObject extends g.SpriteParameterObject {
   /** 所属するパズル。 */
@@ -36,8 +37,6 @@ export class JigsawPiece extends g.Sprite {
    * 子ピースは全て自分よりIDが大きい。
    */
   pieceChildren: JigsawPiece[] | undefined;
-  /** ピースを持っているユーザー。 */
-  holdUser: any | undefined;
   /**
    * ピースがハマっているか。  
    * 真なら動かせない。
@@ -45,7 +44,7 @@ export class JigsawPiece extends g.Sprite {
   fitted: boolean;
 
   constructor(param: PieceParameterObject) {
-    if(param.local != true) 
+    if(param.local != true)
       throw Error("ピースの `local` は `true` にしてください。");
     if(param.touchable != true)
       throw Error("ピース生成時の `touchable` は `true` にしてください。")
@@ -59,7 +58,6 @@ export class JigsawPiece extends g.Sprite {
       this.connectPieceIds.push(+con);
     this.owner = undefined;
     this.pieceChildren = undefined;
-    this.holdUser = undefined;
     this.fitted = false;
 
     // マウスイベント
@@ -100,6 +98,13 @@ export class JigsawPiece extends g.Sprite {
   }
 
   /**
+   * 自分を持っているプレイヤーを返す。居なければ `undefined`
+   */
+  holdPlayer(): MyPlayer | undefined {
+    return JigsawGame.this.pieceHoldPlayer(this.pazzle.pazzleId, this.pieceId);
+  }
+
+  /**
    * クリックした時の処理。  
    * 親が居れば親にイベントを送る。
    * @param piece 別のピースから送られたイベントかどうか。違うなら `undefinded`
@@ -118,11 +123,12 @@ export class JigsawPiece extends g.Sprite {
     }
 
     // ピースを持ってるのは他人
-    if(this.holdUser && this.holdUser != ev.player.id) return;
+    var holdPlayer = this.holdPlayer();
+    if(holdPlayer && holdPlayer.id != ev.player.id) return;
 
     var data: PieceDownEventData = {
       id: 0,
-      pazzleId:this.pazzle.pazzleId,
+      pazzleId:this.pazzle.pazzleAssetId,
       pieceId: this.pieceId,
       playerId: ev.player.id
     };
@@ -134,7 +140,13 @@ export class JigsawPiece extends g.Sprite {
    */
   downEvent(data: PieceDownEventData): void {
     // ホールドユーザーを変更
-    this.holdUser = data.playerId;
+    var player = JigsawGame.this.searchPlayer(data.playerId);
+    if(player == undefined) return;
+    player.holdPiece = {
+      pazzleId: this.pazzle.pazzleId,
+      pieceId: this.pieceId,
+    };
+
     // このピースの描画順を一番上に
     if(this.parent)
       this.parent.append(this);
@@ -159,11 +171,13 @@ export class JigsawPiece extends g.Sprite {
     }
 
     // ピースを持ってるのは他人
-    if(this.holdUser != ev.player.id) return;
+    var holdPlayer = this.holdPlayer();
+    if(holdPlayer == undefined) return;
+    if(holdPlayer.id != ev.player.id) return;
 
     var data: PieceMoveEventData = {
       id: 1,
-      pazzleId:this.pazzle.pazzleId,
+      pazzleId:this.pazzle.pazzleAssetId,
       pieceId: this.pieceId,
       playerId: ev.player.id,
       pos: {
@@ -179,6 +193,10 @@ export class JigsawPiece extends g.Sprite {
    */
   moveEvent(data: PieceMoveEventData): void {
     if(this.fitted) return;
+    if(this.owner) return;
+    // ピースを持ってるのは他人
+    var holdPlayer = this.holdPlayer();
+    if(holdPlayer && holdPlayer.id != data.playerId) return;
     this.move(data.pos);
   }
 
@@ -201,11 +219,12 @@ export class JigsawPiece extends g.Sprite {
     }
 
     // ピースを持ってるのは他人
-    if(this.holdUser != ev.player.id) return;
+    var holdPlayer = this.holdPlayer();
+    if(holdPlayer && holdPlayer.id != ev.player.id) return;
 
     var data: PieceUpEventData = {
       id: 2,
-      pazzleId:this.pazzle.pazzleId,
+      pazzleId:this.pazzle.pazzleAssetId,
       pieceId: this.pieceId,
       playerId: ev.player.id,
       pos: {x: this.x, y: this.y},
@@ -217,10 +236,16 @@ export class JigsawPiece extends g.Sprite {
    * ピースを離した時に呼ばれるイベント。
    */
   upEvent(data: PieceUpEventData): void {
-    this.move(data.pos);
-    console.log("x: "+this.x+"   y: "+this.y);
+    if(this.fitted) return;
+    if(this.owner) return;
 
-    this.holdUser = undefined;
+    // ピースを持ってるのが他人のときに、とりあえず所持ピースをなくす
+    var holdPlayer = this.holdPlayer();
+    if(holdPlayer == undefined) return;
+    holdPlayer.holdPiece = undefined;
+    if(holdPlayer.id != data.playerId) return;
+
+    this.move(data.pos);
 
     // つなげたユーザーを取得
     var p = JigsawGame.this.searchPlayer(data.playerId);

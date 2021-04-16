@@ -270,7 +270,7 @@ export class JigsawGame {
    */
   addPazzle(pazzleId: number) {
     // 新しいパズルを生成
-    var pazzle = new JigsawPazzle(this.assets.scene, this.assets.pazzles[pazzleId]);
+    var pazzle = new JigsawPazzle(this.assets.scene, this.playingPazzles.length, this.assets.pazzles[pazzleId]);
     this.playingPazzles.push(pazzle);
     this.pazzleLayer.append(pazzle.masterLayer);
   }
@@ -287,7 +287,7 @@ export class JigsawGame {
       return;
     }
     for(var pId=0; pId<this.playingPazzles.length; pId++) {
-      if(this.playingPazzles[pId].pazzleId == pazzleId) {
+      if(this.playingPazzles[pId].pazzleAssetId == pazzleId) {
         this.playingPazzles[pId].masterLayer.remove();
         this.playingPazzles.splice(pId, 1);
       }
@@ -300,7 +300,7 @@ export class JigsawGame {
    */
   getPazzle(pId: number): JigsawPazzle {
     for (var pzl of this.playingPazzles) {
-      if (pzl.pazzleId != pId) continue;
+      if (pzl.pazzleAssetId != pId) continue;
       return pzl;
     }
     throw Error(`一致するパズルが見つかりませんでした。\npId ${pId}\nパズル一覧\n${this.playingPazzles}`);
@@ -340,6 +340,20 @@ export class JigsawGame {
       titleBtn.destroy(true);
       g.game.raiseEvent(new g.MessageEvent({ message: "GT" }));
     });
+  }
+
+  /**
+   * そのピースを持っているプレイヤーを返す。居なければ `undefined`
+   * @param pazzleId `this.playingPazzles` の要素番目。パズルID。
+   * @param pieceId ピースID。
+   */
+  pieceHoldPlayer(pazzleId: number, pieceId: number): MyPlayer | undefined {
+    for(var player of this.players) {
+      if(player.holdPiece == undefined) continue;
+      if(player.holdPiece.pazzleId == pazzleId &&
+         player.holdPiece.pieceId == pieceId) return player;
+    }
+    return undefined;
   }
 
   /**
@@ -395,8 +409,6 @@ export class JigsawGame {
 
     switch (me.id) {
       case PieceDownEventData.ID:       // ピースクリックイベント
-        // 呼び出したのが自分なら、何もしない
-        if(me.playerId == g.game.selfId) return;
         var down = me as PieceDownEventData;
         this.getPiece(down.pazzleId, down.pieceId).downEvent(down);
         break;
@@ -412,7 +424,6 @@ export class JigsawGame {
         break;
     }
   }
-
 
   /**
    * 画面を拡大する。

@@ -1,11 +1,12 @@
 
 /**
- * プレイヤーの情報。
- * 
+ * プレイヤーの情報。  
  * グローバル。
  */
 export class MyPlayer implements g.Player {
+  /** プレイヤーID。 */
   id: string;
+  /** プレイヤー名。 */
   name: string;
   /** 生主かどうか。 */
   liver: boolean;
@@ -13,6 +14,13 @@ export class MyPlayer implements g.Player {
   pointer: { x: number, y: number };
   /** スコア。 */
   score: number;
+  /** 持っているピースの情報。 */
+  holdPiece: {
+    /** `JigsawGame.playingPazzle` の要素番目。 */
+    pazzleId: number,
+    /** ピースのID。 */
+    pieceId: number,
+  } | undefined;
 
   /**
    * onPlayerJoin メソッドにより呼び出される。
@@ -26,6 +34,7 @@ export class MyPlayer implements g.Player {
     this.liver = liver == true;
     this.pointer = {x: 0, y: 0};
     this.score = 0;
+    this.holdPiece = undefined;
   }
 
   /**
@@ -49,58 +58,3 @@ export class MyPlayer implements g.Player {
     this.pointer = {x, y};
   }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-// import { EntityStateFlags } from "@akashic/akashic-engine";
-// import { JigsawGame } from "./JigsawGame";
-
-// /**
-//  * プレイヤーの情報を管理するクラス。
-//  * 参加してるプレイヤー分のクラスが生成される。
-//  */
-// export class MyPlayerInfo {
-//   /**
-//    * プレイヤー名。
-//    */
-//   name: string;
-//   /**
-//    * プレイヤーが生主かどうか。
-//    */
-//   liver: boolean;
-//   /**
-//    * 参加しているかどうか。
-//    */
-//   playing: boolean;
-//   /**
-//    * スコア。
-//    */
-//   score: number;
-
-//   constructor(id: string, name: string, liver?: boolean) {
-//     this.name = name;
-//     this.liver = (liver != undefined && liver);
-//     this.playing = false;
-//     this.score = 0;
-//   }
-
-//   /**
-//    * ゲームに参加する。
-//    */
-//   play() {
-//     if(g.game.selfId == undefined) return;
-//     this.playing = true;
-//   }
-// }
