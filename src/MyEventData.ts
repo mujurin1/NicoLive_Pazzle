@@ -58,4 +58,6 @@ export class PieceUpEventData implements MEDataBase {
   pazzleId: number;
   /** ピースID。 */
   pieceId: number;
+  /** 移動先。 */
+  pos: { x:number, y:number };
 }

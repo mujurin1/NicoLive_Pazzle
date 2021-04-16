@@ -284,7 +284,7 @@ export class JigsawPazzle {
       ) return false;
 
       // ボードにハマっているピース
-    if(pieceA.fited || pieceB.fited) return false;
+    if(pieceA.fitted || pieceB.fitted) return false;
 
     // 繋がるかどうかを調べる
     if(!this.isConnect(pieceA, pieceB)) return false;
@@ -344,10 +344,10 @@ export class JigsawPazzle {
     // ピースをピースレイヤーからボードレイヤーに移動する
     this.boardLayer.append(piece);
 
-    piece.fitted();
+    piece.fitting();
     if(piece.pieceChildren != undefined) {
       for(var p of piece.pieceChildren)
-        p.fitted(false);
+        p.fitting(false);
     }
     return true;
   }
@@ -358,7 +358,7 @@ export class JigsawPazzle {
    */
   clearCheck(): void {
     for(var p of this.pieces) {
-      if(!p.fited) return;
+      if(!p.fitted) return;
     }
     // ここまで来たなら、クリア
     this.isClear = true;

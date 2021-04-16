@@ -389,16 +389,20 @@ export class JigsawGame {
    */
   private boardEvent(ev: g.MessageEvent) {
     var me = ev.data as MEDataBase;
-
-    // 呼び出したのが自分なら何もしない
-    // if (me.playerId == g.game.selfId) return;
+    // ピースの位置を同期するために、
+    // 最後のイベント `PiceUpEvent` で、ピースの座標を指定し、確定させる
+    // こうしないと、操作プレイヤーがリロードすると、操作前の位置に戻ってしまう
 
     switch (me.id) {
       case PieceDownEventData.ID:       // ピースクリックイベント
+        // 呼び出したのが自分なら、何もしない
+        if(me.playerId == g.game.selfId) return;
         var down = me as PieceDownEventData;
         this.getPiece(down.pazzleId, down.pieceId).downEvent(down);
         break;
       case PieceMoveEventData.ID:       // ピース移動イベント
+        // 呼び出したのが自分なら、何もしない
+        if(me.playerId == g.game.selfId) return;
         var move = me as PieceMoveEventData;
         this.getPiece(move.pazzleId, move.pieceId).moveEvent(move);
         break;

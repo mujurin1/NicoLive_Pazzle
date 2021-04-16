@@ -42,7 +42,7 @@ export class JigsawPiece extends g.Sprite {
    * ピースがハマっているか。  
    * 真なら動かせない。
    */
-  fited: boolean;
+  fitted: boolean;
 
   constructor(param: PieceParameterObject) {
     if(param.local != true) 
@@ -60,7 +60,7 @@ export class JigsawPiece extends g.Sprite {
     this.owner = undefined;
     this.pieceChildren = undefined;
     this.holdUser = undefined;
-    this.fited = false;
+    this.fitted = false;
 
     // マウスイベント
     this.onPointDown.add(this.onPointDownP, this);
@@ -90,8 +90,8 @@ export class JigsawPiece extends g.Sprite {
    * 
    * @param hold ハメたとき持っていたピースかどうか
    */
-  fitted(hold?: boolean) {
-    this.fited = true;
+  fitting(hold?: boolean) {
+    this.fitted = true;
     this.touchable = false;
     
     if(hold == undefined) hold = true;
@@ -109,7 +109,7 @@ export class JigsawPiece extends g.Sprite {
       return;
 
     // ピースがボードにハマっているなら
-    if(this.fited) return;
+    if(this.fitted) return;
 
     // 親がいるなら親にイベントを送る
     if(this.owner) {
@@ -127,7 +127,7 @@ export class JigsawPiece extends g.Sprite {
       playerId: ev.player.id
     };
     g.game.raiseEvent(new g.MessageEvent(data));
-    // this.downEvent(data);
+    this.downEvent(data);
   }
   /**
    * ピースをクリックした時に呼ばれるイベント。
@@ -150,7 +150,7 @@ export class JigsawPiece extends g.Sprite {
       return;
 
     // ピースがボードにハマっているなら
-    if(this.fited) return;
+    if(this.fitted) return;
 
     // 親がいるなら親にイベントを送る
     if(this.owner) {
@@ -170,14 +170,15 @@ export class JigsawPiece extends g.Sprite {
         x: this.x + ev.prevDelta.x * JigsawGame.this.camera.scaleX,
         y: this.y + ev.prevDelta.y * JigsawGame.this.camera.scaleY }
     };
-    
+
     g.game.raiseEvent(new g.MessageEvent(data));
-    // this.moveEvent(data);
+    this.moveEvent(data);
   }
   /**
    * ピースを移動した時に呼ばれるイベント。
    */
   moveEvent(data: PieceMoveEventData): void {
+    if(this.fitted) return;
     this.move(data.pos);
   }
 
@@ -191,7 +192,7 @@ export class JigsawPiece extends g.Sprite {
       return;
 
     // ピースがボードにハマっているなら
-    if(this.fited) return;
+    if(this.fitted) return;
 
     // 親がいるなら親にイベントを送る
     if(this.owner) {
@@ -207,6 +208,7 @@ export class JigsawPiece extends g.Sprite {
       pazzleId:this.pazzle.pazzleId,
       pieceId: this.pieceId,
       playerId: ev.player.id,
+      pos: {x: this.x, y: this.y},
     };
     g.game.raiseEvent(new g.MessageEvent(data));
     // this.upEvent(data);
@@ -215,6 +217,10 @@ export class JigsawPiece extends g.Sprite {
    * ピースを離した時に呼ばれるイベント。
    */
   upEvent(data: PieceUpEventData): void {
+    this.move(data.pos);
+    console.log("x: "+this.x+"   y: "+this.y);
+    
+
     this.holdUser = undefined;
 
     // つなげたユーザーを取得
