@@ -85,6 +85,18 @@ export class PazzlePreview {
       x: 130, y: 100,
       parent: this.info,
     });
+    // バージョン情報
+    new Label({
+      scene: assets.scene,
+      font: this.font,
+      width: 80,
+      height: 30,
+      text: "v0.5",
+      fontSize: 30,
+      x: 1150,
+      y: 680,
+      parent: this.display,
+    })
     this.changePreview(0);
 
     this.gomi(liverId);
@@ -115,7 +127,7 @@ export class PazzlePreview {
       var back = new g.FilledRect({
         scene,
         width: 180, height: 90,
-        x: 35, y: 610,
+        x: 85, y: 570,
         cssColor: "green",
         parent: this.display,
         local: true,
@@ -130,7 +142,7 @@ export class PazzlePreview {
       var next = new g.FilledRect({
         scene,
         width: 180, height: 90,
-        x: 300, y: 610,
+        x: 350, y: 570,
         cssColor: "green",
         parent: this.display,
         local: true,

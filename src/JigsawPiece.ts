@@ -219,7 +219,6 @@ export class JigsawPiece extends g.Sprite {
   upEvent(data: PieceUpEventData): void {
     this.move(data.pos);
     console.log("x: "+this.x+"   y: "+this.y);
-    
 
     this.holdUser = undefined;
 
