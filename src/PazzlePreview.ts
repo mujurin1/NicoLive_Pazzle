@@ -22,8 +22,6 @@ export class PazzlePreview {
   info: g.FilledRect;
   /** パズルのタイトル。 */
   title: Label;
-  /** パズルのピース。 */
-  piece: g.FilledRect;
   /** その他情報。 */
   other: Label;
 
@@ -77,13 +75,6 @@ export class PazzlePreview {
       x: 20, y: 10,
       parent: this.info,
     });
-    this.piece = new g.FilledRect({
-      scene: assets.scene,
-      cssColor: "rgba(0,0,0,0.05)",
-      width: 100, height: 100,
-      x: 20, y: 100,
-      parent: this.info,
-    })
     this.other = new Label({
       scene: assets.scene,
       font: this.font,
@@ -259,34 +250,7 @@ export class PazzlePreview {
     this.title.text = pzl.setting[0];
     this.title.invalidate();
 
-    // ピース更新
-    // 前回追加したピースがあれば消す
-    if(this.piece.children)
-      this.piece.remove(this.piece.children[0]);
-    // ピースはローカル。
-    var pic = new g.Sprite({
-      scene: this.display.scene,
-      src: pzl.pieces[0],
-      touchable: true,
-      local: true,
-      parent: this.piece,
-    });
-    spriteSet(pic, this.piece.width, this.piece.height);
     var time = 0;
-    // 時間経過またはクリックで更新する
-    pic.onUpdate.add(_ => {
-      //                        ↓の数字が待機秒数
-      if(++time % (g.game.fps * 5) != 0) return;
-      var picId = Math.floor(Math.random() * pzl.pieces.length);
-      pic.src = pzl.pieces[picId];
-      pic.invalidate();
-    });
-    pic.onPointDown.add(_ => {
-      time = 0;
-      var picId = Math.floor(Math.random() * pzl.pieces.length);
-      pic.src = pzl.pieces[picId];
-      pic.invalidate();
-    });
 
     // その他情報
     this.other.text = `ピース ${pzl.setting[1]} 枚！\r\nなまえ ${JigsawGame.getName()}`;

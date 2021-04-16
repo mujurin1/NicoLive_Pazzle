@@ -1,3 +1,4 @@
+import { PazzleProperty } from "./JigsawPazzle";
 
 /**
  * パズルアセットを纏めるクラス。
@@ -26,6 +27,8 @@ export class PazzleAssets {
   private static SETTING_FILE: string = "setting.txt";
   /** アセットの完成画像ファイル名。`preview.jpg` */
   private static PREVIEW_FILE: string = "preview.jpg";
+  /** ピースが集まった画像。 */
+  private static PIECES_FILE: string = "pieces.png";
 
   /** アセットの所属するシーン。 */
   scene: g.Scene;
@@ -34,16 +37,7 @@ export class PazzleAssets {
   /** パズルアセットの数。 */
   count: number;
   /** パズルのアセット配列。 */
-  pazzles: {
-    /** パズルのID。 */
-    pazzleId: number,
-    /** パズルのプレビュー画像のアセット。 */
-    preview: g.ImageAsset,
-    /** パズルのピース画像のアセットの配列。 */
-    pieces: g.ImageAsset[],
-    /** パズルの設定ファイルのアセットから読み込んだ文字列配列。 */
-    setting: string[],
-  }[];
+  pazzles: PazzleProperty[];
 
 
   /**
@@ -56,24 +50,23 @@ export class PazzleAssets {
     this.asset_setting = this.scene.asset.getText(PazzleAssets.ASSET_SETTING).data.split("\r\n");
     this.count = +(this.asset_setting[0]);
     this.pazzles = new Array(this.count);
-    this.initAssets();
+    this.readAssets();
   }
 
   /**
-   * アセットの初期化。
+   * 全アセットの読み込み。
    */
-  private initAssets(): void {
+  private readAssets(): void {
     for(var pzlId=0; pzlId<this.count; pzlId++) {
       var dir = `${PazzleAssets.ASSET_DIR}/${pzlId}`;
       var pre = this.scene.asset.getImage(`${dir}/${PazzleAssets.PREVIEW_FILE}`);
       var set = this.scene.asset.getText(`${dir}/${PazzleAssets.SETTING_FILE}`).data.split("\r\n");
-      var len = +set[1];
-      var pic = new Array(len);
-      for(var pi=0; pi<len; pi++) {
-        pic[pi] = this.scene.asset.getImage(`${dir}/${pi}.png`);
-      }
-      this.pazzles[pzlId] = { pazzleId: pzlId, preview: pre, pieces: pic, setting: set };
+      this.pazzles[pzlId] = {
+        pazzleId: pzlId,
+        preview: this.scene.asset.getImage(`${dir}/${PazzleAssets.PREVIEW_FILE}`),
+        pieces: this.scene.asset.getImage(`${dir}/${PazzleAssets.PIECES_FILE}`),
+        setting: this.scene.asset.getText(`${dir}/${PazzleAssets.SETTING_FILE}`).data.split("\r\n"),
+      };
     }
   }
-
 }

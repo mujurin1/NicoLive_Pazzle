@@ -114,7 +114,6 @@ function main(param: g.GameMainParameterObject): void {
 
   // 生主が入るかシーンの読み込み終了まで待機する
   var wait = () => {
-    
     if (liverId == null) return;
     pazzlePre = new PazzlePreview(assets, liverId);
     scene.append(pazzlePre.display);
@@ -160,7 +159,7 @@ function guardScene(scene: g.Scene, font: g.Font): g.FilledRect {
     text: "観戦中",
     parent: guard,
   });
-  joinBtn.onPointDown.addOnce(ev => {
+  joinBtn.onPointDown.add(ev => {
     PazzlePreview.onJoinBtnDown(ev);
     guard.destroy();
   });

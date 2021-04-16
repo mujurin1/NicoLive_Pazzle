@@ -10,8 +10,8 @@ export interface PazzleProperty {
   pazzleId: number;
   /** パズルのプレビュー画像のアセット。 */
   preview: g.ImageAsset;
-  /** パズルのピース画像のアセットの配列。 */
-  pieces: g.ImageAsset[];
+  /** パズルのピース画像のアセット。 */
+  pieces: g.ImageAsset;
   /** パズルの設定ファイルのアセットから読み込んだ文字列配列。 */
   setting: string[];
 }
@@ -107,14 +107,21 @@ export class JigsawPazzle {
       local: true,
       parent: this.masterLayer,
     });
-    this.pieces = new Array(param.pieces.length);
-    for(var pId=0; pId<param.pieces.length; pId++) {
+    /** ピースの総数。 */
+    var pieceCnt = +param.setting[1];
+    this.pieces = new Array(pieceCnt);
+    for(var pId=0; pId<pieceCnt; pId++) {
       var pos = param.setting[pId + 2].split(",");
-      var con = param.setting[param.pieces.length + 2 + pId].split(",");
+      var con = param.setting[pieceCnt + 2 + pId].split(",");
+      var cutInfo = param.setting[pieceCnt*2 + 2 + pId].split(",");
 
       this.pieces[pId] = new JigsawPiece({
         scene: scene,
-        src: param.pieces[pId],
+        src: param.pieces,
+        srcX: +cutInfo[0],
+        srcY: +cutInfo[1],
+        width: +cutInfo[2],
+        height: +cutInfo[3],
         parent: this.pieceLayer,
         pazzle: this,
         pieceId: pId,
@@ -131,8 +138,8 @@ export class JigsawPazzle {
      * ary に切り取った要素を順番に詰める
      * ary の要素順にピースを並べる
      */
-    var list: number[] = new Array(param.pieces.length);
-    var ary: number[] = new Array(param.pieces.length);
+    var list: number[] = new Array(pieceCnt);
+    var ary: number[] = new Array(pieceCnt);
     for(var i=0; i<list.length; i++) {
       list[i] = i;
     }

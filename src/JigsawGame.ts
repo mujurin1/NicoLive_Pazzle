@@ -391,7 +391,7 @@ export class JigsawGame {
     var me = ev.data as MEDataBase;
 
     // 呼び出したのが自分なら何もしない
-    if (me.playerId == g.game.selfId) return;
+    // if (me.playerId == g.game.selfId) return;
 
     switch (me.id) {
       case PieceDownEventData.ID:       // ピースクリックイベント

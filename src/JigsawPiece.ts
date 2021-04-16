@@ -127,7 +127,7 @@ export class JigsawPiece extends g.Sprite {
       playerId: ev.player.id
     };
     g.game.raiseEvent(new g.MessageEvent(data));
-    this.downEvent(data);
+    // this.downEvent(data);
   }
   /**
    * ピースをクリックした時に呼ばれるイベント。
@@ -172,7 +172,7 @@ export class JigsawPiece extends g.Sprite {
     };
     
     g.game.raiseEvent(new g.MessageEvent(data));
-    this.moveEvent(data);
+    // this.moveEvent(data);
   }
   /**
    * ピースを移動した時に呼ばれるイベント。
@@ -209,7 +209,7 @@ export class JigsawPiece extends g.Sprite {
       playerId: ev.player.id,
     };
     g.game.raiseEvent(new g.MessageEvent(data));
-    this.upEvent(data);
+    // this.upEvent(data);
   }
   /**
    * ピースを離した時に呼ばれるイベント。
