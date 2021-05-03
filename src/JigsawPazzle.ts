@@ -1,234 +1,226 @@
-import { JigsawGame } from "./JigsawGame";
+import { GameMaster } from "./GameMaster";
 import { JigsawPiece } from "./JigsawPiece";
+import { MyPlayer } from "./MyPlayer";
+import { PazzleAsset } from "./PazzleAsset";
+import { PazzleAssets } from "./PazzleAssets";
+import { CutParam, PieceCut } from "./PieceCut";
+import { StopWatch } from "./StopWatch";
+import { OwnerChildPiece, Point, Size } from "./Tuples";
 
-/**
- * ジグソーパズルのデータ。
- * `JigsawGame` に新しくパズルを追加する時の引数に使う。
- */
-export interface PazzleProperty {
-  /** パズルのID */
-  pazzleId: number;
-  /** パズルのプレビュー画像のアセット。 */
-  preview: g.ImageAsset;
-  /** パズルのピース画像のアセット。 */
-  pieces: g.ImageAsset;
-  /** パズルの設定ファイルのアセットから読み込んだ文字列配列。 */
-  setting: string[];
-}
 
-/**
- * ジグソーパズルクラス。  
- * ボードとピースをセットで持っている。
- * 
- * 背景レイヤーとピースレイヤーを２つ持っている。
- * 
- * ローカル。
- */
 export class JigsawPazzle {
-  /** パズルのアセットID。 */
-  pazzleAssetId: number;
-  /** パズルのID。`JigsawGame.playingPazzles` の要素番目。 */
+  /** シーン。 */
+  get scene(): g.Scene {
+    return GameMaster.this.scene;
+  }
+
+  /** パズルID。アセットIDではない。 */
   pazzleId: number;
-  /** パズルの名前。 */
-  name: string;
-  /** パズルの完成画像。この位置に応じて、ピースがハマる位置が変わる。 */
-  preview: g.Sprite;
-  /**
-   * このボードのピース。  
-   * ピースのIDと要素番目は等しい。
-   */
+  /** パズルのアセット。 */
+  get asset(): PazzleAsset {
+    return PazzleAssets.this.pazzleAssets[this.pazzleId];
+  }
+
+  /** ピースの配列。 */
   pieces: JigsawPiece[];
+  /** ピースの枚数。 */
+  pieceCount: number;
+  /** ボードにハマったピースの枚数。 */
+  fittedPieceCount: number = 0;
 
+  /** パズルエリアのサイズ。 */
+  pazzleSize: Size;
   /**
-   * パズル全体を表示するレイヤー。
+   * ボードとパズルエリアのマージン。  
+   * 上と下、左と右は同じ幅。
    */
-  masterLayer: g.E;
-  /**
-   * ボード用のレイヤー。  
-   * ピースを置く目安の背景。
-   */
-  boardLayer: g.E;
-  /** このボードのピースを表示するレイヤー。 */
-  pieceLayer: g.E;
-
-  /**
-   * このパズルエリアの幅。  
-   * 参照用、変更してはいけない。
-   */
-  width: number;
-  /**
-   * このパズルエリアの高さ。  
-   * 参照用、変更してはいけない。
-   */
-  height: number;
-  /** パズルを置くパネルと、エリアの差（余白） */
-  margin: {w:number, h:number};
+  margin: Size;
   /** ピースのくっつく許容値。 */
   permission: number;
 
-  /** このパズルをクリアしたか。 */
-  isClear: boolean = false;
+  /** ボードとピースを表示するレイヤー。 */
+  masterLayer: g.E;
+  /** ピースをハメるボードレイヤー。 */
+  boardLayer: g.E;
+  /** ピースが存在するピースレイヤー。 */
+  pieceLayer: g.E;
+
+  preview: g.Sprite;
+
+  /** パズルの状態。 */
+  pazzleStatus: "playing" | "clear" = "playing";
+  /** 経過時間タイマー。 */
+  stopWatch: StopWatch;
+
+  /** 最後のピースをハメたプレイヤー。 */
+  lastPlayer: MyPlayer | undefined;
 
   /**
-   * _
+   * パズルを生成する。  
+   * 引数の `id` はアセットIDではないので注意。
    */
-  constructor(scene: g.Scene, pazzleId: number, param: PazzleProperty){
-    this.pazzleAssetId = param.pazzleId;
-    this.pazzleId = pazzleId;
-    this.name = param.setting[0];
-    this.preview = new g.Sprite({
-      scene,
-      src: param.preview,
-      local: true,
-    });
-    // パズルを置くパネルと、エリアの差（余白）
-    this.margin = {
-      w: Math.floor(this.preview.width * 0.8),
-      h: Math.floor(this.preview.height * 0.8) };
-    // このパズルのエリアを設定
-    this.width = this.preview.width + this.margin.w*2;
-    this.height = this.preview.height + this.margin.h*2;
-    this.masterLayer = new g.E({
-      scene: scene,
-      width: this.width,
-      height: this.height,
-      local: true,
-    });
-    this.boardLayer = new g.E({
-      scene: scene,
-      width: this.preview.width,
-      height: this.preview.height,
-      x: this.margin.w,
-      y: this.margin.h,
-      local: true,
-      parent: this.masterLayer,
-    });
-    this.pieceLayer = new g.E({
-      scene: scene,
-      width: this.width,
-      height: this.height,
-      local: true,
-      parent: this.masterLayer,
-    });
-    /** ピースの総数。 */
-    var pieceCnt = +param.setting[1];
-    this.pieces = new Array(pieceCnt);
-    for(var pId=0; pId<pieceCnt; pId++) {
-      var pos = param.setting[pId + 2].split(",");
-      var con = param.setting[pieceCnt + 2 + pId].split(",");
-      var cutInfo = param.setting[pieceCnt*2 + 2 + pId].split(",");
+  constructor(id: number, param: CutParam) {
+    this.pazzleId = id;
+    let cutted = PieceCut.cut(this.scene, param);
 
-      this.pieces[pId] = new JigsawPiece({
-        scene: scene,
-        src: param.pieces,
-        srcX: +cutInfo[0],
-        srcY: +cutInfo[1],
-        width: +cutInfo[2],
-        height: +cutInfo[3],
-        parent: this.pieceLayer,
-        pazzle: this,
-        pieceId: pId,
-        position: pos,
-        connectPiece: con,
-        local: true,
-        touchable: true,
-      });
+    this.pieceCount = cutted.answerPos.length;
+    this.pieces = new Array(this.pieceCount);
+
+    this.preview = cutted.preview;
+
+    this.margin = {
+      w: this.preview.width,
+      h: this.preview.height };
+    this.pazzleSize = {
+      w: this.preview.width  + this.margin.w*2,
+      h: this.preview.height + this.margin.h*2 };
+    this.stopWatch = new StopWatch(this.scene);
+    this.stopWatch.start();
+
+    // レイヤーの生成
+    this.masterLayer = new g.E({ scene: this.scene });
+    this.boardLayer = new g.E({ scene: this.scene });
+    this.pieceLayer = new g.E({ scene: this.scene });
+    // レイヤーの追加。順番大事。
+    this.masterLayer.append(this.boardLayer);
+    this.masterLayer.append(this.pieceLayer);
+
+    // ピース生成
+    for(let pId=0; pId<this.pieceCount; pId++) {
+      this.pieces[pId] = new JigsawPiece(this, pId, cutted);
+      this.pieceLayer.append(this.pieces[pId].piece);
     }
 
-    /* ピースをランダムに並べる
-     * list を作る。初期化（０から連番）
+    this.permission = this.pieces[0].piece.width/6;
+    // this.permission = 10000;
+
+    // ピースを置く部分
+    let back = new g.FilledRect({
+      scene: this.scene,
+      cssColor: "rgba(255,255,255,0.4)",
+      width: this.preview.srcWidth,
+      height: this.preview.srcHeight,
+      x: this.margin.w,
+      y: this.margin.h,
+      parent: this.boardLayer,
+    });
+
+    this.randomLineUp();
+  }
+
+  /**
+   * ピースをランダムに並べる。
+   */
+  randomLineUp() {
+    /* list を作る。初期化（０から連番）
      * list からランダムな位置の要素を切り取る（削除してその要素を取得）
      * ary に切り取った要素を順番に詰める
      * ary の要素順にピースを並べる
      */
-    var list: number[] = new Array(pieceCnt);
-    var ary: number[] = new Array(pieceCnt);
-    for(var i=0; i<list.length; i++) {
+    let list: number[] = new Array(this.pieceCount);
+    let ary: number[] = new Array(this.pieceCount);
+    for(let i=0; i<list.length; i++) {
       list[i] = i;
     }
-    
-    for(var i=0; i<ary.length; i++) {
-      var r = Math.floor(g.game.random.generate() * list.length);
-      
-      var n = list.splice(r, 1);
+    for(let i=0; i<ary.length; i++) {
+      let r = Math.floor(g.game.random.generate() * list.length);
+      let n = list.splice(r, 1);
       ary[i] = n[0];
     }
-
     // ピース１つに使う面積
-    var mw = this.pieces[0].width * 1.2;
-    var mh = this.pieces[0].height * 1.2;
+    let mw = this.pieces[0].piece.width  * 1.4;
+    let mh = this.pieces[0].piece.height * 1.45;
     // 一番内側が縦横何枚並ぶか（横は両端を含めない、縦は含める）
-    var lx = Math.ceil(this.boardLayer.width / mw);
-    var ly = Math.ceil(this.boardLayer.height / mh)+2;
+    let lx = Math.ceil((this.preview.width ) / mw)   +1;
+    let ly = Math.ceil((this.preview.height) / mh)+2 +1;
     // ピースを置く位置（初期位置を設定）
-    var px = this.boardLayer.x;
-    var py = this.boardLayer.y - mh;
-    var flg = true;
+    let px = this.margin.w      -mw/2;
+    let py = this.margin.h - mh -mh/2;
+    let flg = true;
+    let func = (): boolean => {
+      let p = ary.pop();
+      if(p == undefined){ flg = false; return true; }
+      this.pieces[p].move({x: px, y: py});
+      return false;
+    };
     // １周外になるたび８枚増える
     while(flg) {
       // 右
-      for(var r=0; r<lx; r++) {
-        var p = ary.pop();
-        if(p == undefined){ flg = false; break; }
-        this.pieces[p].moveTo(px, py);
+      for(let r=0; r<lx; r++) {
+        if(func()) break;
         px += mw;
       }
       // 下
-      for(var r=0; r<ly-1; r++) {
-        var p = ary.pop();
-        if(p == undefined){ flg = false; break; }
-        this.pieces[p].moveTo(px, py);
+      for(let r=0; r<ly-1; r++) {
+        if(func()) break;
         py += mh;
       }
       // 左
-      for(var r=0; r<lx+1; r++) {
-        var p = ary.pop();
-        if(p == undefined){ flg = false; break; }
-        this.pieces[p].moveTo(px, py);
+      for(let r=0; r<lx+1; r++) {
+        if(func()) break;
         px -= mw;
       }
       // 上
-      for(var r=0; r<ly; r++) {
-        var p = ary.pop();
-        if(p == undefined){ flg = false; break; }
-        this.pieces[p].moveTo(px, py);
+      for(let r=0; r<ly; r++) {
+        if(func()) break;
         py -= mh;
       }
       lx += 2;
       ly += 2;
     }
-
-    // 許容値を変える
-    this.permission = this.pieces[0].width/8;
-    this.changeBoard();
   }
 
-  /** 配列の中に一致する値があるか調べる。 */
-  private aryFind(ary: number[], s: number): boolean {
-    for(var n of ary) {
-      if(n == s) return true;
-    }
-    return false;
+  // /**
+  //  * @param pzlId 作成するパズルのID。`_pazzles` のインデックス。
+  //  */
+  // static create(pzlId: number): JigsawPazzle {
+  //   let pzl = this._pazzles[pzlId];
+  //   if(pzl != undefined) {
+  //     pzl.init();
+  //     return pzl;
+  //   }
+  //   pzl = new JigsawPazzle(pzlId);
+
+  //   this._pazzles[pzlId] = pzl;
+  //   return pzl;
+  // }
+
+  /**
+   * IDからピースを取得する。
+   * 
+   * @param id 取得するピースのID
+   */
+  private getPiece(id: number) : JigsawPiece {
+    return this.pieces[id];
   }
 
   /**
-   * ピースを置く背景を変更する。
+   * ２つのピースが繋がる位置にあるかを調べる。  
+   * 隣り合ってないピースとも繋がると言われるので注意。
+   * @returns 繋がるかどうか。どちらかのピースがこのボードのものでないなら `null`
    */
-  changeBoard() {
-    // // 背景として完成画像を置く
-    // var back = new g.Sprite({
-    //   scene: this.preview.scene,
-    //   src: this.preview.src,
-    //   parent: this.boardLayer,
-    // });
-    // 背景そのままだと見づらいので、少し暗くする
-    var fillter = new g.FilledRect({
-      scene: this.preview.scene,
-      width: this.preview.srcWidth,
-      height: this.preview.srcHeight,
-      cssColor: "rgba(0,0,0,0.4)",
-      parent: this.boardLayer,
-    });
+  private isConnect(pieceA: JigsawPiece, pieceB: JigsawPiece): boolean {
+    let just = pieceA.justPxBw(pieceB);
+
+    let posA = pieceA.position;
+    let posB = pieceB.position;
+    return (Math.abs(posB.x - posA.x - just.x) <= this.permission &&
+            Math.abs(posB.y - posA.y - just.y) <= this.permission );
+  }
+
+  /**
+   * 全てのピースがフィットしてればクリアにする。  
+   * fitPiece() の後に呼ばれる。
+   * @param player 最後にピースをハメたプレイヤー
+   */
+   clearCheck(player: MyPlayer): void {
+    for(let p of this.pieces) {
+      if(!p.fitted) return;
+    }
+
+    this.pazzleStatus = "clear";
+    this.lastPlayer = player;
+    GameMaster.this.clearPazzle(this);
   }
 
   /**
@@ -238,13 +230,13 @@ export class JigsawPazzle {
    * @param piece 検査するピース
    * @returns 繋がったピースID。繋がらなければ `undefined`
    */
-  connectPieceAll(piece: JigsawPiece): number | undefined {
+   connectPieceAll(piece: JigsawPiece): OwnerChildPiece | undefined {
     // 一度に繋がるピースは1つだけにしておく
-    if(piece.pieceChildren != undefined) {
-      for(var child of piece.pieceChildren) {
-        let pId = this.connectPieceNext(child);
-        if(pId != undefined)
-          return pId;
+    if(piece.children != undefined) {
+      for(let child of piece.children) {
+        let ocp = this.connectPieceNext(child);
+        if(ocp != undefined)
+          return ocp;
       }
     }
     return this.connectPieceNext(piece);
@@ -255,161 +247,77 @@ export class JigsawPazzle {
    * @param piece 検査するピース
    * @returns 繋がったピースID。繋がらなければ `undefined`
    */
-  private connectPieceNext(piece: JigsawPiece): number | undefined {
-    for(var nextId of piece.connectPieceIds) {
-      if( this.connectPiece(piece, this.getPiece(nextId)) )
-        return nextId;
+  private connectPieceNext(piece: JigsawPiece): OwnerChildPiece | undefined {
+    for(let nextId of piece.connect) {
+      let ocp = this.connectPiece(piece, this.getPiece(nextId));
+      if(ocp != undefined) return ocp;
     }
     return undefined;
   }
   /**
    * ２つのピースが繋がるなら繋げる。  
    * ２つのピースが隣り合っているかはここでは検査しない。
-   * @param pieceA `pieceB` と隣り合っているピース。
-   * @param pieceB `pieceA` と隣り合っているピース。
+   * @param ownerP `pieceB` と隣り合っているピース。
+   * @param childP `pieceA` と隣り合っているピース。
    */
-  private connectPiece(pieceA: JigsawPiece, pieceB: JigsawPiece): boolean {
+  private connectPiece(ownerP: JigsawPiece, childP: JigsawPiece): OwnerChildPiece | undefined {
     // ピースがこのパズルのピースじゃなかった。
     // バグでも無い限り絶対 `false` になる（ここでリターンしない）はず
-    if(pieceA.pazzle != this || pieceB.pazzle != this) return false;
+    if(ownerP.jigsaw != this || childP.jigsaw != this) return undefined;
 
     // すでに繋がっている
-    if( pieceA.owner != undefined &&
-        ( pieceA.owner.pieceId == pieceB.pieceId ||
-          pieceB.owner != undefined &&
-          ( pieceA.pieceId == pieceB.owner.pieceId ||
-            pieceA.owner.pieceId == pieceB.owner.pieceId
+    if( ownerP.owner != undefined &&
+        ( ownerP.owner.pieceId == childP.pieceId ||
+          childP.owner != undefined &&
+          ( ownerP.pieceId == childP.owner.pieceId ||
+            ownerP.owner.pieceId == childP.owner.pieceId
           )
         ) ||
-        pieceB.owner != undefined &&
-        pieceA.pieceId == pieceB.owner.pieceId
-      ) return false;
+        childP.owner != undefined &&
+        ownerP.pieceId == childP.owner.pieceId
+      ) return undefined;
+
     // どっちかのピースは、誰かが持っている
-    if(pieceA.holdPlayer() != undefined || pieceB.holdPlayer() != undefined)
-      return false;
+    let holdOwner = ownerP.holdPlayer();
+    let holdChild = childP.holdPlayer();
+    if(holdOwner != undefined && !MyPlayer.isSelf(holdOwner.playerId) ||
+       holdChild != undefined && !MyPlayer.isSelf(holdChild.playerId) )
+      return undefined;
 
     // ボードにハマっているピース
-    if(pieceA.fitted || pieceB.fitted) return false;
+    if(ownerP.fitted || childP.fitted) return undefined;
 
     // 繋がるかどうかを調べる
-    if(!this.isConnect(pieceA, pieceB)) return false;
+    if(!this.isConnect(ownerP, childP)) return undefined;
 
     // pieceA と pieceB が繋がるのはここまでで確定した。
 
     // owner がいればバトンタッチする
-    if(pieceA.owner != undefined)
-      pieceA = pieceA.owner;
-    if(pieceB.owner != undefined)
-      pieceB = pieceB.owner;
+    if(ownerP.owner != undefined)
+      ownerP = ownerP.owner;
+    if(childP.owner != undefined)
+      childP = childP.owner;
 
-    if(pieceA.pieceChildren == undefined)
-      pieceA.pieceChildren = new Array();
-    // pieceA に pieceB と childPiece を入れる
-    pieceA.pieceChildren.push(pieceB);
-    if(pieceB.pieceChildren != undefined) {
-      for(var child of pieceB.pieceChildren) {
-        pieceA.pieceChildren.push(child);
-      }
-    }
-    pieceB.pieceChildren = undefined;
-    // 1. `owner` を `ownerPiece` に
-    // 2. `owner` に `piece` を追加する
-    // 3. `piece` の座標を正しくする
-    for(var piece of pieceA.pieceChildren) {
-      piece.owner = pieceA;
-      piece.owner.append(piece);
-      var disPx = this.justPxBw(piece.owner, piece);
-      piece.x = disPx.x;
-      piece.y = disPx.y;
-      piece.modified();
-    }
-    return true;
+    // ownerP.connectPiece(childP);
+    return {
+      owner: ownerP,
+      child: childP
+    };
   }
 
   /**
    * ボードにピースがハマるならハメる。
    */
-  fitPiece(piece: JigsawPiece): boolean {
-    if(piece.pazzle != this) {
-      throw Error(`このボードに属さないピースが指定されました。\n piece ${piece}`);
-    }
-    var pos = piece.getPosition();
+  fitBoard(piece: JigsawPiece): undefined | number {
+    let pos = piece.position;
 
-    // // ハマらないなら
-    // if( Math.abs(pos.x - piece.position.x) > this.permission ||
-    //     Math.abs(pos.y - piece.position.y) > this.permission )
-    // ハマらないなら
-    if( Math.abs(pos.x - piece.position.x - this.margin.w) > this.permission ||
-        Math.abs(pos.y - piece.position.y - this.margin.h) > this.permission )
-      return false;
+    if( Math.abs(pos.x - piece.answerPosition.x - this.margin.w) > this.permission ||
+        Math.abs(pos.y - piece.answerPosition.y - this.margin.h) > this.permission )
+      return undefined;
 
-    // ピースの座標をボードにピッタリ合わせる
-    piece.x = piece.position.x;
-    piece.y = piece.position.y;
-    // ピースをピースレイヤーからボードレイヤーに移動する
-    this.boardLayer.append(piece);
+    return piece.pieceId;
 
-    piece.fitting();
-    if(piece.pieceChildren != undefined) {
-      for(var p of piece.pieceChildren)
-        p.fitting(false);
-    }
-    return true;
-  }
-
-  /**
-   * 全てのピースがフィットしてればクリアにする。  
-   * fitPiece() の後に呼ばれる。
-   */
-  clearCheck(): void {
-    for(var p of this.pieces) {
-      if(!p.fitted) return;
-    }
-    // ここまで来たなら、クリア
-    this.isClear = true;
-    JigsawGame.this.pazzleClear(this);
-  }
-
-  /**
-   * ２つのピースが繋がる位置にあるかを調べる。
-   * 隣り合ってないピースとも繋がると言われるので注意。
-   * @returns 繋がるかどうか。どちらかのピースがこのボードのものでないなら `null`
-   */
-  private isConnect(pieceA: JigsawPiece, pieceB: JigsawPiece): boolean {
-    var just = this.justPxBw(pieceA, pieceB);
-
-    var posA = pieceA.getPosition();
-    var posB = pieceB.getPosition();
-    return (Math.abs(posB.x - posA.x - just.x) <= this.permission &&
-            Math.abs(posB.y - posA.y - just.y) <= this.permission );
-  }
-
-  /**
-   * 完成したパズルを想定した距離。
-   * 
-   * このボードに属さないピースが指定された場合エラー。
-   * 
-   * @returns `pieceA` を基準に `pieceB` が離れているピクセル数
-   */
-  justPxBw(pieceA: JigsawPiece, pieceB: JigsawPiece): {x: number, y: number} {
-    if(pieceA.pazzle != pieceB.pazzle)
-      throw Error(`このボードに属さないピースが指定されました。\npieceA ${pieceA}\npieceB ${pieceB}`);
-    return {
-      x: pieceB.position.x - pieceA.position.x,
-      y: pieceB.position.y - pieceA.position.y,
-    };
-  }
-
-  /**
-   * IDからピースを取得する。
-   * 
-   * @param id 取得するピースのID
-   */
-  private getPiece(id: number) : JigsawPiece {
-    // 存在しないIDを検索した
-    if(id < 0 || this.pieces.length-1 < id) {
-      throw Error(`Error: 存在しないピースを検索した。\nピースID:${id} は ${this.name} に存在しません。`);
-    }
-    return this.pieces[id];
+    // piece.fitPiece();
+    // this.boardLayer.append(piece.piece);
   }
 }

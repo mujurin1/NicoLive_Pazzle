@@ -93,7 +93,7 @@ module.exports = {
 		],
 		"@typescript-eslint/no-empty-function": "error",
 		"@typescript-eslint/no-parameter-properties": "error",
-		"@typescript-eslint/no-var-requires": "error",
+		"@typescript-eslint/no-let-requires": "error",
 		"@typescript-eslint/quotes": [
 			"error",
 			"double"

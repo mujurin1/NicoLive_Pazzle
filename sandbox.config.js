@@ -1,4 +1,4 @@
-var config = {
+let config = {
 	"warn": {
 		"es6": false
 	}

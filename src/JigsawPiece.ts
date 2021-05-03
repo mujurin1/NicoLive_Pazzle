@@ -1,108 +1,231 @@
-import { JigsawGame } from "./JigsawGame";
-import { JigsawPazzle } from "./JigsawPazzle";
-import { PieceDownEventData, PieceMoveEventData, PieceUpEventData } from "./MyEventData";
-import { MyPlayer } from "./MyPlayer";
 
-export interface PieceParameterObject extends g.SpriteParameterObject {
-  /** 所属するパズル。 */
-  pazzle: JigsawPazzle;
+import { GameMaster } from "./GameMaster";
+import { JigsawPazzle } from "./JigsawPazzle";
+import { ConnectPieceEventData, FitPieceEventData, PieceDownEventData, PieceMoveEventData, PieceUpEventData } from "./MyEventData";
+import { MyPlayer } from "./MyPlayer";
+import { MySound } from "./MySound";
+import { PazzleAsset } from "./PazzleAsset";
+import { PiecesParam } from "./PieceCut";
+import { Point } from "./Tuples";
+
+
+export class JigsawPiece {
   /** ピースのID。 */
   pieceId: number;
-  /** ピースの座標の文字列。["X", "Y"] */
-  position: string[];
-  /** 繋がるピースのIDの文字列。["a","b",".."] */
-  connectPiece: string[];
-}
+  /** 自分の所属するパズル。 */
+  jigsaw: JigsawPazzle;
+  /** 自分のピース画像。 */
+  piece: g.Sprite;
 
-/**
- * ジグソーパズルのピース。  
- * ローカルです。
- */
-export class JigsawPiece extends g.Sprite {
-  /** 自分の所属するボード。 */
-  pazzle: JigsawPazzle;
-  /** ピースID。 */
-  pieceId: number;
-  /** パズルが完成した時のピースの位置。 */
-  position: { x: number, y: number }
-  /** 繋がるピースのID。 */
-  connectPieceIds: number[];
-  /**
-   * 自分の親ピースのID。  
-   * 繋がっているピースのうち最もIDが小さいピース。
-   */
+  /** 自分が所属しているピース。 */
   owner: JigsawPiece | undefined;
-  /**
-   * 自分の子ピース。  
-   * 子ピースは全て自分よりIDが大きい。
-   */
-  pieceChildren: JigsawPiece[] | undefined;
-  /**
-   * ピースがハマっているか。  
-   * 真なら動かせない。
-   */
-  fitted: boolean;
+  /** 自分に所属しているピース。 */
+  children: JigsawPiece[] | undefined;
 
-  constructor(param: PieceParameterObject) {
-    if(param.local != true)
-      throw Error("ピースの `local` は `true` にしてください。");
-    if(param.touchable != true)
-      throw Error("ピース生成時の `touchable` は `true` にしてください。")
+  /** 繋がるピースID。 */
+  connect: number[];
+  /** 完成した時のピースの座標。 */
+  answerPosition: Point;
 
-    super(param);
-    this.pazzle = param.pazzle;
-    this.pieceId = param.pieceId;
-    this.position = {x: +param.position[0], y: +param.position[1]};
-    this.connectPieceIds = new Array();
-    for(var con of param.connectPiece)
-      this.connectPieceIds.push(+con);
-    this.owner = undefined;
-    this.pieceChildren = undefined;
-    this.fitted = false;
+  /** ピースがボードにハマっているか。 */
+  fitted: boolean = false;
 
-    // マウスイベント
-    this.onPointDown.add(this.onPointDownP, this);
-    this.onPointMove.add(this.onPointMoveP, this);
-    this.onPointUp.add(this.onPointUpP, this);
+  /** ピースの情報を更新する回数を間引くための値。 */
+  static updateCnt: number;
+  /** ピースの情報の更新回数を間引く数。 */
+  static cutCnt: number = 2;
+
+  // ピースを動かすための情報
+  /** ピースをクリックした座標。 */
+  downPos: Point;
+  /** 最後の `startDelta` の値。 */
+  lastDelta: Point = {x: 0, y: 0};
+
+  /** パズルのアセット。 */
+  get asset(): PazzleAsset {
+    return this.jigsaw.asset;
   }
-
   /**
    * ピースの座標を返す。
    */
-   getPosition(): {x: number, y: number} {
-    if(!this.owner) {
-      var x = this.x;
-      var y = this.y;
+  get position(): Point {
+    if (!this.owner) {
+      return { x: this.piece.x, y: this.piece.y };
     } else {
-      var disPx = this.pazzle.justPxBw(this.owner, this);
-      var ownPos = this.owner.getPosition();
-      x = ownPos.x + disPx.x;
-      y = ownPos.y + disPx.y;
+      let disPx = this.owner.justPxBw(this);
+      let ownPos = this.owner.position;
+      return {
+        x: ownPos.x + disPx.x,
+        y: ownPos.y + disPx.y
+      };
     }
-    return {x, y};
+  }
+
+  /** ピースの座標のセッター。 */
+  private _position(point: Point): void {
+    this.piece.x = point.x;
+    this.piece.y = point.y;
+    this.piece.modified();
   }
 
   /**
-   * ピースがボードにハマった時にボードから呼び出される。  
-   * ハマった時にボードに座標を合わせる処理をした後に実行される。
-   * 
-   * @param hold ハメたとき持っていたピースかどうか
+   * ピースの更新頻度を変更する。
    */
-  fitting(hold?: boolean) {
-    this.fitted = true;
-    this.touchable = false;
-    
-    if(hold == undefined) hold = true;
-    if(!hold) return;
-    // この後に効果音やら演出やら書こう
+  static changeUpdateCnt(): void {
+    let actCnt = MyPlayer.actPlayerCnt;
+    if(actCnt < 3) {
+      this.cutCnt = 2;
+    }else if(actCnt < 10) {
+      this.cutCnt = 5;
+    } else if(actCnt < 30) {
+      this.cutCnt = 10;
+    } else if(actCnt < 50) {
+      this.cutCnt = 20;
+    } else {
+      this.cutCnt = 30;
+    }
   }
 
-  /**
-   * 自分を持っているプレイヤーを返す。居なければ `undefined`
-   */
+  constructor(jigsaw: JigsawPazzle, pieceId: number, cutted: PiecesParam) {
+    this.jigsaw = jigsaw;
+    this.piece = new g.Sprite({
+      scene: GameMaster.this.scene,
+      src: cutted.piecesSrc.src,
+      srcX: cutted.cutInfo[pieceId].p.x,
+      srcY: cutted.cutInfo[pieceId].p.y,
+      width: cutted.cutInfo[pieceId].s.w,
+      height: cutted.cutInfo[pieceId].s.h,
+      local: true,
+      touchable: true,
+    });
+    this.pieceId = pieceId;
+    this.connect = cutted.connectIds[pieceId];
+    this.answerPosition = cutted.answerPos[pieceId];
+
+    // マウスイベント
+    this.piece.onPointDown.add(this.onPointDownP, this);
+    this.piece.onPointMove.add(this.onPointMoveP, this);
+    this.piece.onPointUp.add(this.onPointUpP, this);
+  }
+
+  /** 自ピースを持っているプレイヤー。 */
   holdPlayer(): MyPlayer | undefined {
-    return JigsawGame.this.pieceHoldPlayer(this.pazzle.pazzleId, this.pieceId);
+    for (let p of MyPlayer.players) {
+      if (p.holdPiece == this) return p;
+    }
+    return null;
   }
+
+  /**
+   * このピースに子ピースを追加する。
+   */
+  connectPiece(isSelf: boolean, piece: JigsawPiece): void {
+    this.owner = undefined;
+    if (this.children == undefined) {
+      this.children = new Array();
+    }
+    this.append(isSelf, piece, true);
+
+    // 子供に子供がいれば
+    if (piece.children != undefined) {
+      for (let c of piece.children) {
+        this.append(isSelf, c, false);
+      }
+      piece.children = undefined;
+    }
+  }
+  /**
+   * ホントに追加する処理。
+   */
+  private append(isSelf: boolean, piece: JigsawPiece, playSound: boolean): void {
+    if (playSound) {
+      if(isSelf) MySound.pieceFit2.play();
+      else       MySound.pieceFit.play();
+    }
+    this.children.push(piece);
+    piece.owner = this;
+    this.piece.append(piece.piece);
+    // 座標を変える
+    piece._position(this.justPxBw(piece));
+  }
+
+  /**
+   * 完成したパズルを想定した距離。  
+   * このボードに属さないピースが指定された場合エラー。
+   * @returns `pieceA` を基準に `pieceB` が離れているピクセル数
+   */
+  justPxBw(piece: JigsawPiece): Point {
+    return {
+      x: piece.answerPosition.x - this.answerPosition.x,
+      y: piece.answerPosition.y - this.answerPosition.y
+    };
+  }
+
+  /**
+   * ボードにハマった時。
+   * @param playSound 音を再生するかどうか。
+   */
+  fitPiece(isSelf: boolean, playSound?: boolean): void {
+    if (playSound !== false) {
+      if(isSelf) MySound.pieceFit2.play();
+      else       MySound.pieceFit.play();
+    }
+
+    this._position({
+      x: this.answerPosition.x + this.jigsaw.margin.w,
+      y: this.answerPosition.y + this.jigsaw.margin.h
+    });
+
+    this.fitted = true;
+    this.piece.touchable = false;
+    this.changeView(false);
+
+    if (this.children != undefined) {
+      for (let c of this.children) {
+        c.fitted = true;
+        c.piece.touchable = false;
+      }
+    }
+  }
+
+  /**
+   * ピースが移動する時に呼ばれる。
+   * @param pos 移動先の座標 x,y
+   */
+  move(pos: Point) {
+    this.piece.moveTo(pos.x, pos.y);
+    this.limitCheck();
+    this.piece.modified();
+  }
+
+  /**
+   * ボードの範囲外に出ていたら範囲内に戻す。
+   */
+  private limitCheck() {
+    let p = this.piece;
+    let max_x = this.jigsaw.pazzleSize.w - p.width;
+    let max_y = this.jigsaw.pazzleSize.h - p.height;
+    if (0 > p.x || isNaN(p.x)) p.x = 0;
+    else if (p.x > max_x) p.x = max_x;
+    if (0 > p.y || isNaN(p.y)) p.y = 0;
+    else if (p.y > max_y) p.y = max_y;
+  }
+
+  /**
+   * ピースの見た目を変更する。
+   * @param isHold `true` 持っている状態。`false` 持っていない状態
+   */
+  changeView(isHold: boolean) {
+    if(isHold) {
+      this.piece.opacity = 0.5;
+    } else {
+      this.piece.opacity = 1;
+    }
+    this.piece.modified();
+  }
+
+
+  // ==================================== ピースイベント ====================================
 
   /**
    * クリックした時の処理。  
@@ -110,94 +233,159 @@ export class JigsawPiece extends g.Sprite {
    * @param piece 別のピースから送られたイベントかどうか。違うなら `undefinded`
    */
   private onPointDownP(ev: g.PointDownEvent, piece?: JigsawPiece): void {
-    if(!ev.player || !ev.player.id)
+    if (g.game.isSkipping) return;
+    // 自分が存在しない
+    if (MyPlayer.self() == undefined) return;
+
+    if (!ev.player || !ev.player.id)
       return;
 
     // ピースがボードにハマっているなら
-    if(this.fitted) return;
+    if (this.fitted) return;
+
+    // バンされている
+    if(MyPlayer.self().BAN) return;
 
     // 親がいるなら親にイベントを送る
-    if(this.owner) {
+    if (this.owner) {
       this.owner.onPointDownP(ev, this);
       return;
     }
 
-    // ピースを持ってるのは他人
-    var holdPlayer = this.holdPlayer();
-    if(holdPlayer && holdPlayer.id != ev.player.id) return;
+    // ピースの更新回数をリセット
+    JigsawPiece.updateCnt = 0;
 
-    var data: PieceDownEventData = {
-      id: 0,
-      pazzleId:this.pazzle.pazzleAssetId,
-      pieceId: this.pieceId,
-      playerId: ev.player.id
+    this.downPos = {
+      x: this.piece.x,
+      y: this.piece.y
     };
-    g.game.raiseEvent(new g.MessageEvent(data));
+
+    let holdPlayer = this.holdPlayer();
+
+    // 誰かがピースを持っている
+    if (holdPlayer != undefined) return;
+    let data = this.raiseDownEvent();
     this.downEvent(data);
   }
+  /**
+   * ピースクリックイベントを発行する。
+   */
+  raiseDownEvent(): PieceDownEventData {
+    let data: PieceDownEventData = {
+      id: PieceDownEventData.ID,
+      pieceId: this.pieceId,
+      playerId: MyPlayer.localPlayerId,
+    };
+    g.game.raiseEvent(new g.MessageEvent(data));
+    return data;
+  }
+
   /**
    * ピースをクリックした時に呼ばれるイベント。
    */
   downEvent(data: PieceDownEventData): void {
-    // ホールドユーザーを変更
-    var player = JigsawGame.this.searchPlayer(data.playerId);
-    if(player == undefined) return;
-    player.holdPiece = {
-      pazzleId: this.pazzle.pazzleId,
-      pieceId: this.pieceId,
-    };
+    /** ピースを操作したプレイヤー。 */
+    let player = MyPlayer.searchPlayerId(data.playerId);
+
+    // 同じピースを誰かが持っている
+    let holder = MyPlayer.searchHoldPiece(this);
+    
+    if(holder != undefined && player.playerId != holder.playerId) {
+      if(player.playerId < holder.playerId) {
+        // ホールドユーザーを変更
+        player.holdPiece = this;
+      } else { return; }
+    } else {
+      player.holdPiece = this;
+    }
+
+    let holdPlayer = this.holdPlayer();
+    // ピースを持ってるのは他人
+    if (holdPlayer != undefined && !MyPlayer.isSelf(holdPlayer.playerId) && !g.game.isSkipping) {
+      // 半透明に
+      this.changeView(true);
+      // // プレイヤー名部分
+      // // 名前を表示
+      // holdPlayer.showName(GameMaster.this.scene);
+      // let pos = this.piece.localToGlobal({x: 0, y:-40});
+      // holdPlayer.moveName(pos);
+    }
 
     // このピースの描画順を一番上に
-    if(this.parent)
-      this.parent.append(this);
+    if (this.piece.parent)
+      this.piece.parent.append(this.piece);
   }
 
   /**
    * クリックしたまま移動した時の処理。  
    * 親が居れば親にイベントを送る。
-   * @param piece 別のピースから送られたイベントかどうか。違うなら `undefinded`
+   * @param childP 子ピースから送られたイベントかどうか。違うなら `undefinded`
    */
-  private onPointMoveP(ev: g.PointMoveEvent, piece?: JigsawPiece): void {
-    if(!ev.player || !ev.player.id)
-      return;
+  onPointMoveP(ev: g.PointMoveEvent, childP?: JigsawPiece): void {
+    if (g.game.isSkipping) return;
+    // 自分が存在しない
+    if (MyPlayer.self() == undefined) return;
 
     // ピースがボードにハマっているなら
-    if(this.fitted) return;
+    if (this.fitted) return;
 
     // 親がいるなら親にイベントを送る
-    if(this.owner) {
+    if (this.owner) {
       this.owner.onPointMoveP(ev, this);
       return;
     }
 
+    let holdPlayer = this.holdPlayer();
     // ピースを持ってるのは他人
-    var holdPlayer = this.holdPlayer();
-    if(holdPlayer == undefined) return;
-    if(holdPlayer.id != ev.player.id) return;
+    if (holdPlayer == undefined || !MyPlayer.isSelf(holdPlayer.playerId)) return;
+    // バンされている
+    if(MyPlayer.self().BAN) return;
 
-    var data: PieceMoveEventData = {
-      id: 1,
-      pazzleId:this.pazzle.pazzleAssetId,
-      pieceId: this.pieceId,
-      playerId: ev.player.id,
-      pos: {
-        x: this.x + ev.prevDelta.x * JigsawGame.this.camera.scaleX,
-        y: this.y + ev.prevDelta.y * JigsawGame.this.camera.scaleY }
+    // ピースの更新回数を増やす
+    JigsawPiece.updateCnt++;
+
+    this.lastDelta = ev.startDelta;
+
+    let p = {
+      x: this.downPos.x + ev.startDelta.x * GameMaster.this.camera.scaleX,
+      y: this.downPos.y + ev.startDelta.y * GameMaster.this.camera.scaleY
     };
 
-    g.game.raiseEvent(new g.MessageEvent(data));
+    let data: PieceMoveEventData = {
+      id: PieceMoveEventData.ID,
+      pieceId: this.pieceId,
+      playerId: MyPlayer.localPlayerId,
+      pos: {
+        // x: this.piece.x + ev.prevDelta.x * GameMaster.this.camera.scaleX,
+        // y: this.piece.y + ev.prevDelta.y * GameMaster.this.camera.scaleY
+        x: p.x,
+        y: p.y
+      }
+    };
+
+    // ピースの更新を間引く
+    if (JigsawPiece.updateCnt % JigsawPiece.cutCnt == 0) {
+      g.game.raiseEvent(new g.MessageEvent(data));
+    }
     this.moveEvent(data);
   }
   /**
    * ピースを移動した時に呼ばれるイベント。
    */
   moveEvent(data: PieceMoveEventData): void {
-    if(this.fitted) return;
-    if(this.owner) return;
-    // ピースを持ってるのは他人
-    var holdPlayer = this.holdPlayer();
-    if(holdPlayer && holdPlayer.id != data.playerId) return;
+    if (this.fitted) return;
+    if (this.owner) return;
+
     this.move(data.pos);
+
+    let holdPlayer = this.holdPlayer();
+    // // プレイヤー名部分
+    // // ピースを持ってるのは他人
+    // if (holdPlayer == undefined || !MyPlayer.isSelf(holdPlayer.playerId) && !g.game.isSkipping) {
+    //   // 名前の位置を更新
+    //   let pos = this.piece.localToGlobal({x: 0, y:-40});
+    //   holdPlayer.moveName(pos);
+    // }
   }
 
   /**
@@ -205,88 +393,93 @@ export class JigsawPiece extends g.Sprite {
    * 親が居れば親にイベントを送る。
    * @param piece 別のピースから送られたイベントかどうか。違うなら `undefinded`
    */
-   private onPointUpP(ev: g.PointUpEvent, child?: JigsawPiece): void {
-    if(!ev.player || !ev.player.id)
-      return;
+  private onPointUpP(ev: g.PointUpEvent, child?: JigsawPiece): void {
+    if (g.game.isSkipping) return;
+    // 自分が存在しない
+    if (MyPlayer.self() == undefined) return;
 
     // ピースがボードにハマっているなら
-    if(this.fitted) return;
+    if (this.fitted) return;
 
     // 親がいるなら親にイベントを送る
-    if(this.owner) {
+    if (this.owner) {
       this.owner.onPointUpP(ev, this);
       return;
     }
 
+    let holdPlayer = this.holdPlayer();
     // ピースを持ってるのは他人
-    var holdPlayer = this.holdPlayer();
-    if(holdPlayer && holdPlayer.id != ev.player.id) return;
+    if (holdPlayer == undefined || !MyPlayer.isSelf(holdPlayer.playerId)) return;
+    // バンされている
+    if(MyPlayer.self().BAN) return;
 
-    var data: PieceUpEventData = {
-      id: 2,
-      pazzleId:this.pazzle.pazzleAssetId,
-      pieceId: this.pieceId,
-      playerId: ev.player.id,
-      pos: {x: this.x, y: this.y},
-    };
-    g.game.raiseEvent(new g.MessageEvent(data));
+    // ピースを離したイベント
+    let data: PieceUpEventData = this.raiseUpEvent();
+
+    // ピースのくっつきとハマり判定
+    // ピースが繋がるかどうか
+    // 繋がる場合 `conPId` には繋がった相手のピースIDが入る
+    let ocp = this.jigsaw.connectPieceAll(this);
+    if (ocp != undefined) {
+      let data: ConnectPieceEventData = {
+        id: ConnectPieceEventData.ID,
+        ownerPieceId: ocp.owner.pieceId,
+        childPieceId: ocp.child.pieceId,
+        playerId: MyPlayer.self().playerId,
+      };
+      g.game.raiseEvent(new g.MessageEvent(data));
+    }
+
+    // ピースがボードにフィットするかどうか
+    let fited = this.jigsaw.fitBoard(this);
+    if (fited != undefined) {
+      let data: FitPieceEventData = {
+        id: FitPieceEventData.ID,
+        pieceId: this.pieceId,
+        playerId: MyPlayer.self().playerId,
+      };
+      g.game.raiseEvent(new g.MessageEvent(data));
+    }
+
     // this.upEvent(data);
   }
+  /**
+   * upEvent を発行する。
+   */
+  raiseUpEvent(): PieceUpEventData {
+    let data: PieceUpEventData = {
+      id: PieceUpEventData.ID,
+      pieceId: this.pieceId,
+      playerId: MyPlayer.localPlayerId,
+      pos: { x: this.piece.x, y: this.piece.y },
+    };
+    g.game.raiseEvent(new g.MessageEvent(data));
+    return data;
+  }
+
   /**
    * ピースを離した時に呼ばれるイベント。
    */
   upEvent(data: PieceUpEventData): void {
-    if(this.fitted) return;
-    if(this.owner) return;
+    if (this.fitted) return;
 
-    // ピースを持ってるのが他人のときに、とりあえず所持ピースをなくす
-    var holdPlayer = this.holdPlayer();
-    if(holdPlayer == undefined) return;
+    let holdPlayer = this.holdPlayer();
+    if (holdPlayer == undefined) return;
+
     holdPlayer.holdPiece = undefined;
-    if(holdPlayer.id != data.playerId) return;
 
-    this.move(data.pos);
+    if (!this.owner)
+      this.move(data.pos);
 
-    // つなげたユーザーを取得
-    var p = JigsawGame.this.searchPlayer(data.playerId);
-    if(p == undefined) return;
+    // ピースを持ってるのは他人
+    if (holdPlayer != undefined && !MyPlayer.isSelf(holdPlayer.playerId) && !g.game.isSkipping) {
 
-    // ピースが繋がるなら繋げる
-    // 繋がる場合 `conPId` には繋がった相手のピースIDが入る
-    var conPId = this.pazzle.connectPieceAll(this);
-    if(conPId) {
-      // ピースが繋がった場合
-      p.scoreUp(1);
+      // // プレイヤー名部分
+      // // 名前の位置を更新
+      // let pos = this.piece.localToGlobal({x: 0, y:-40});
+      // holdPlayer.moveName(pos);
+      // // プレイヤー名を隠す
+      // holdPlayer.hideName();
     }
-    // ピースがボードにフィットするならフィットする
-    var fited = this.pazzle.fitPiece(this);
-    if(fited) {
-      // ピースが盤面にハマった
-      p.scoreUp(1);
-    }
-    // パズルをクリアしたかを調べる。
-    this.pazzle.clearCheck();
-  }
-
-  /**
-   * ピースが移動する時に呼ばれる。
-   * @param pos 移動先の座標 x,y
-   */
-  private move(pos: {x:number, y:number}) {
-    this.moveTo(pos.x, pos.y);
-    this.limitCheck();
-    this.modified();
-  }
-
-  /**
-   * ボードの範囲外に出ていたら範囲内に戻す。
-   */
-  private limitCheck() {
-    var max_x = this.pazzle.width - this.width;
-    var max_y = this.pazzle.height - this.height;
-    if(0 > this.x)          this.x = 0;
-    else if(this.x > max_x) this.x = max_x;
-    if(0 > this.y)          this.y = 0;
-    else if(this.y > max_y) this.y = max_y;
   }
 }

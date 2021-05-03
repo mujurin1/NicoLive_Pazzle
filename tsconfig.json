@@ -3,12 +3,11 @@
     "target": "ES5",
     "lib": ["es5"],
     "noImplicitAny": true,
-    "module": "commonjs",
+    "module": "commonjs" ,
     "outDir": "script",
     "types" : [],
     "allowUmdGlobalAccess": true,
-    "noImplicitUseStrict": true,
-    "strictNullChecks": true
+    "noImplicitUseStrict": true
   },
   "files": [
     "node_modules/@akashic/akashic-engine/index.runtime.d.ts"

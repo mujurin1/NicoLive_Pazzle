@@ -33,7 +33,9 @@
     "typescript": "3.9.9"
   },
   "dependencies": {
+    "@akashic-extension/akashic-hover-plugin": "^3.0.0",
     "@akashic-extension/akashic-label": "^3.0.1",
-    "@akashic-extension/resolve-player-info": "^1.1.0"
+    "@akashic-extension/resolve-player-info": "^1.1.0",
+    "kamihubuki-js": "github:blackspotbear/kamihubuki-js"
   }
 }

@@ -11,8 +11,8 @@ describe("mainScene", () => {
 		expect(client.type).toBe("active");
 
 		const game = client.game!;
-		expect(game.width).toBe(640);
-		expect(game.height).toBe(360);
+		expect(game.width).toBe(1280);
+		expect(game.height).toBe(720);
 		expect(game.fps).toBe(30);
 
 		const scene = client.game.scene()!;

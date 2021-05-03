@@ -1,5 +1,5 @@
 <style>
   body {
-    background: rgb(255, 186, 186);
+    background: #0087CC;
   }
 </style>
