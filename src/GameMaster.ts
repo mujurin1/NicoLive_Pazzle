@@ -377,7 +377,12 @@ export class GameMaster {
    * ゲームプレイ中のみ毎フレーム実行する。
    */
   private updatePlaying() {
-    if(g.game.isSkipping) return;
+    // スキップ中なら10分毎に更新する
+    if(g.game.isSkipping) {
+      if(this.gameStatus == "palying" && this.playingPzl.stopWatch.time%600 == 0)
+        this.playingInfo.update();
+      return;
+    }
     if(this._updateTick++ != g.game.fps) return;
     this._updateTick = 0;
     if(this.gameStatus != "palying") return;
